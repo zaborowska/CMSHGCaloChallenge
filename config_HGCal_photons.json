@@ -3,9 +3,9 @@
 {
     'FILES':'CMSHGCaloChallenge/datasets/photon_files_train_local.txt',
     'VAL_FILES':'CMSHGCaloChallenge/datasets/photon_files_val_local.txt',
-    'EVAL':'datasets/photon_files_test_local.txt',
+    'EVAL':'datasets/photon_files_test.txt',
     'HGCAL' : True,
-    'BIN_FILE': '/global/u1/o/ozamram/CaloDiffusion/HGCalShowers/geoms/HGCal_geo_2024.pkl',
+    'BIN_FILE': 'HGCalShowers/geoms/HGCal_geo_2024.pkl',
     'PART_TYPE' : 'photon',
     'AVG_SHOWER_LOC' : 'dataset_1_photons_avg_showers.h5',
     'DATASET_NUM' : 121,

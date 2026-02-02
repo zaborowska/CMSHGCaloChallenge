@@ -22,7 +22,7 @@ import utils
 from plotting.plotting_utils import make_hist
 
 def train_and_evaluate_cls(model, data_train, data_test, optim, arg):
-    """ train the model and evaluate along the way"""
+    """ train the model/eos/cms/store/group/offcomp-sim/HGCal_Sim_Samples_2024/SinglePhoton_E-1To1000_Eta-2_Phi-1p57_Z-321-CloseByParticleGun/Phase2Spring24DIGIRECOMiniAOD-noPU_AllTP_140X_mcRun4_realistic_v4-v1_tree/h5s/HGCal_showers26.h5 and evaluate along the way"""
     best_eval_acc = float('-inf')
     arg.best_epoch = -1
     try:
@@ -327,6 +327,7 @@ def compute_metrics(flags):
 
     geant_energies = None
     geant_showers = None
+    feats_gen = feats_geant = None
     data_dict = {}
 
 
@@ -336,7 +337,6 @@ def compute_metrics(flags):
             exit(1)
         f_sample_list = utils.get_files(flags.generated)
 
-        feats_gen = feats_geant = None
         for f_sample in f_sample_list: 
             try:
                 feats = LoadSample( f_sample, flags.EMin, flags.nevts, reprocess=flags.reprocess)
@@ -393,25 +393,82 @@ def compute_metrics(flags):
         fname = ""
         sep_power_result_str = ""
         sep_power_sum = 0.0
-        print(feats_gen.shape)
+        if feats_gen:
+            print(feats_gen.shape)
+        else:
+            print(feats_geant.shape)
         for i in range(len(feat_names)):
             if(flags.plot): fname = flags.plot_folder + feat_names[i].replace(" ", "") + ".png"
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                sep_power = make_hist(feats_geant[:,i], feats_gen[:,i], xlabel = feat_names[i], fname =  fname)
+                if(not flags.geant_only):
+                    sep_power = make_hist(feats_geant[:,i], feats_gen[:,i], xlabel = feat_names[i], fname =  fname)
+                else:
+                    sep_power = make_hist(feats_geant[:,i], "", xlabel = feat_names[i], fname =  fname)
 
             sep_power_sum += sep_power
             sep_power_result_str += "%i %s: %.3e \n" % (i, feat_names[i], sep_power)
 
 
+
+        # --- Extra plot: log10(cell energy), with cell energy summed over ALL layers ---
+        eps_cell = 1e-8
+
+        # Helper to build flattened log10(sum_layers(cellE)) distribution from a file list
+        def _cell_logE_sumLayers(file_list):
+            out = None
+            total_evts = 0
+
+            for f_sample in file_list:
+                # Respect flags.nevts across multiple files
+                remaining = -1 if flags.nevts <= 0 else max(flags.nevts - total_evts, 0)
+                if remaining == 0:
+                    break
+
+                showers, _ = LoadFile(f_sample, flags.EMin, remaining)  # showers: (N, L, C)
+                cellE = np.sum(showers, axis=1)                         # (N, C) sum over layers
+                cellE = cellE[cellE > 0]
+                logE = np.log10(cellE).reshape(-1)
+
+                out = logE if out is None else np.concatenate((out, logE), axis=0)
+                total_evts += showers.shape[0]
+
+                if flags.nevts > 0 and total_evts >= flags.nevts:
+                    break
+
+            return out
+
+
+        # Always build Geant distribution
+        cell_logE_geant = _cell_logE_sumLayers(f_geant_list)
+
+        xlabel = "Log10 Cell Energy (sum over layers)"
+        fname = ""
+        if flags.plot:
+            fname = os.path.join(flags.plot_folder, "LogCellEnergySumLayers.png")
+
+        if flags.geant_only:
+            make_hist(cell_logE_geant, None, xlabel=xlabel, fname=fname)
+        else:
+            # Plot Geant vs Gen (two histograms)
+            cell_logE_gen = _cell_logE_sumLayers(f_sample_list)
+
+            sep_power_cell = make_hist(
+                cell_logE_geant,
+                cell_logE_gen,
+                xlabel=xlabel,
+                fname=fname
+            )
+            sep_power_sum += sep_power_cell
+            sep_power_result_str += "CELL %s: %.3e \n" % (xlabel, sep_power_cell)
+        
         sep_power_result_str += "\n TOTAL : %.2f" % sep_power_sum
         with open(os.path.join(flags.plot_folder, 'sep_power.txt'), 'w') as f:
             f.write(sep_power_result_str)
 
     #FPD KPD
 
-
-    if(do_classifier):
+    if(do_classifier and not flags.geant_only):
         labels_diffu = np.ones((feats_gen.shape[0], 1), dtype=np.float32)
         labels_geant = np.zeros((feats_geant.shape[0], 1), dtype=np.float32)
 
@@ -470,7 +527,7 @@ def compute_metrics(flags):
                 f.write('Final result of classifier test (AUC / JSD):\n'+\
                         '{:.4f} / {:.4f}\n\n'.format(eval_auc, eval_JSD))
 
-    if(do_fpd):
+    if(do_fpd and not flags.geant_only):
         min_samples = min(feats_geant.shape[0], 20000)
         fpd_val, fpd_err = jetnet.evaluation.fpd(feats_geant, feats_gen, min_samples = min_samples)
         kpd_val, kpd_err = jetnet.evaluation.kpd(feats_geant, feats_gen)
@@ -489,7 +546,7 @@ if(__name__ == "__main__"):
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-p', '--plot_folder', default='plots/eval/', help='Folder to save results')
-    parser.add_argument('-d', '--data_folder', default='data/', help='Folder with Geant dataset')
+    parser.add_argument('-d', '--data_folder', default='data_dir/', help='Folder with Geant dataset')
     parser.add_argument('--generated', '-g', default='', help='Generated showers')
     parser.add_argument('--config', '-c', default='config_dataset2.json', help='Training parameters')
     parser.add_argument('-n', '--nevts', type=int,default=-1, help='Number of events to load')
