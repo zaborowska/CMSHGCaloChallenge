@@ -22,7 +22,7 @@ import utils
 from plotting.plotting_utils import make_hist
 
 def train_and_evaluate_cls(model, data_train, data_test, optim, arg):
-    """ train the model/eos/cms/store/group/offcomp-sim/HGCal_Sim_Samples_2024/SinglePhoton_E-1To1000_Eta-2_Phi-1p57_Z-321-CloseByParticleGun/Phase2Spring24DIGIRECOMiniAOD-noPU_AllTP_140X_mcRun4_realistic_v4-v1_tree/h5s/HGCal_showers26.h5 and evaluate along the way"""
+    """ train the model and evaluate along the way"""
     best_eval_acc = float('-inf')
     arg.best_epoch = -1
     try:

@@ -79,6 +79,12 @@ def make_hist(
         alpha=0.2,
     )
 
+    if generated is None:
+        if len(fname) > 0:
+            fig.savefig(fname)
+        plt.close(fig)
+        return 0
+
     # Generator lines
     dist_gen, binning = np.histogram(generated, bins=binning, density=False)
     dist_gen_normalized = dist_gen / dist_gen.sum()
