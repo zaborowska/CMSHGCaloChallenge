@@ -46,11 +46,25 @@ def make_hist(
         bins=binning,
         density=False,
     )
-    dist_ref_normalized = dist_ref / dist_ref.sum()
-    dist_ref_error = dist_ref_normalized / np.sqrt(dist_ref)
-    dist_ref_ratio_error = dist_ref_error / dist_ref_normalized
-    dist_ref_ratio_error_isnan = np.isnan(dist_ref_ratio_error)
-    dist_ref_ratio_error[dist_ref_ratio_error_isnan] = 0.0
+    # Normalize (guard against empty histogram)
+    ref_sum = dist_ref.sum()
+    dist_ref_normalized = dist_ref / ref_sum if ref_sum > 0 else dist_ref.astype(float)
+    den_counts = np.sqrt(dist_ref) # 0 where N=0
+    # Poisson error on normalized histogram: sigma(p_i) = sqrt(N_i) / N_tot
+    # (equivalent to p_i / sqrt(N_i) but safe for N_i=0)
+    dist_ref_error = np.divide(
+        den_counts,
+        ref_sum,
+        out=np.zeros_like(dist_ref_normalized, dtype=float),
+        where=ref_sum > 0,
+    )
+    # Relative error used for ratio panel: sigma(p_i) / p_i = 1/sqrt(N_i)
+    dist_ref_ratio_error = np.divide(
+        dist_ref_error,
+        dist_ref_normalized,
+        out=np.zeros_like(dist_ref_error),
+        where=dist_ref_normalized != 0,
+    )
 
     ax[0].step(
         binning,

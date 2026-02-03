@@ -443,6 +443,27 @@ def compute_metrics(flags):
 
             return out
 
+        # Helper to build log10(cellE) distribution from a file list
+        def _cell_logE_allCells(file_list):
+            out = None
+            total_evts = 0
+
+            for f_sample in file_list:
+                remaining = -1 if flags.nevts <= 0 else max(flags.nevts - total_evts, 0)
+                if remaining == 0:
+                    break
+
+                showers, _ = LoadFile(f_sample, flags.EMin, remaining)   # (N, L, C)
+                vals = showers[showers > 0]                              # variable length
+                logE = np.log10(vals).reshape(-1) if vals.size else np.empty((0,), dtype=float)
+
+                out = logE if out is None else np.concatenate((out, logE), axis=0)
+                total_evts += showers.shape[0]
+
+                if flags.nevts > 0 and total_evts >= flags.nevts:
+                    break
+
+            return out if out is not None else np.empty((0,), dtype=float)
 
         # Always build Geant distribution
         cell_logE_geant = _cell_logE_sumLayers(f_geant_list)
@@ -466,10 +487,32 @@ def compute_metrics(flags):
             )
             sep_power_sum += sep_power_cell
             sep_power_result_str += "CELL %s: %.3e \n" % (xlabel, sep_power_cell)
+
+        cell_logEcell_geant = _cell_logE_allCells(f_geant_list)
+        xlabel = "Log10 Cell Energy (all cells)"
+        fname = ""
+        cell_logE_bins = np.linspace(*np.quantile(cell_logEcell_geant[cell_logEcell_geant > -8], [0.0, 1.0]), 50)
+        if flags.plot:
+            fname = os.path.join(flags.plot_folder, "LogAllCellEnergy.png")
+
+        if flags.geant_only:
+            make_hist(cell_logEcell_geant, None, xlabel=xlabel, fname=fname)
+        else:
+            # Plot Geant vs Gen (two histograms)
+            cell_logEcell_gen = _cell_logE_allCells(f_sample_list)
+
+            sep_power_cell = make_hist(
+                cell_logEcell_geant,
+                cell_logEcell_gen,
+                xlabel=xlabel,
+                fname=fname
+            )
+            sep_power_sum += sep_power_cell
+            sep_power_result_str += "CELL_INDIVIDUAL %s: %.3e \n" % (xlabel, sep_power_cell)
         
-        sep_power_result_str += "\n TOTAL : %.2f" % sep_power_sum
-        with open(os.path.join(flags.plot_folder, 'sep_power.txt'), 'w') as f:
-            f.write(sep_power_result_str)
+            sep_power_result_str += "\n TOTAL : %.2f" % sep_power_sum
+            with open(os.path.join(flags.plot_folder, 'sep_power.txt'), 'w') as f:
+                f.write(sep_power_result_str)
 
     #FPD KPD
 
