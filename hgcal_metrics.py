@@ -401,10 +401,15 @@ def compute_metrics(flags):
             if(flags.plot): fname = flags.plot_folder + feat_names[i].replace(" ", "") + ".png"
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                if(not flags.geant_only):
-                    sep_power = make_hist(feats_geant[:,i], feats_gen[:,i], xlabel = feat_names[i], fname =  fname)
+                if "Log Energy Layer" in feat_names[i]:
+                    # do not show the "0" values in the plot
+                    bins = np.linspace(*np.quantile(feats_geant[:, i][feats_geant[:, i] > -8], [0.0, 1.0]), 50)
                 else:
-                    sep_power = make_hist(feats_geant[:,i], "", xlabel = feat_names[i], fname =  fname)
+                    bins = None
+                if(not flags.geant_only):
+                    sep_power = make_hist(feats_geant[:,i], feats_gen[:,i], xlabel = feat_names[i], fname =  fname, binning = bins)
+                else:
+                    sep_power = make_hist(feats_geant[:,i], None, xlabel = feat_names[i], fname =  fname, binning = bins)
 
             sep_power_sum += sep_power
             sep_power_result_str += "%i %s: %.3e \n" % (i, feat_names[i], sep_power)
